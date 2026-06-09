@@ -1,152 +1,111 @@
-# 🗃️ wacli — WhatsApp CLI: sync, search, send
+# Kirimy v2 — Open Source WhatsApp All-in-One Platform
 
-![wacli banner](docs/assets/readme-banner.jpg)
+This project is a **fork of**
+[`openclaw/wacli`](https://github.com/openclaw/wacli) and evolves it into an all-in-one platform:
 
-A scriptable WhatsApp client built on [`whatsmeow`](https://github.com/tulir/whatsmeow). Pairs as a linked WhatsApp Web device, mirrors your messages into a local SQLite store, and gives you offline search, sending, and chat/group/contact management from the command line.
+- **CLI** for operator and script workflows.
+- **Daemon API** for service-to-service integrations.
+- **UI** entrypoints for product-style consumption.
+- **MCP adapters** for automation tooling.
 
-> Third-party tool. Uses the WhatsApp Web protocol via `whatsmeow`. Not affiliated with WhatsApp.
+All surfaces are intended to be layered on top of the same core logic derived from wacli, so new features can be adopted once in the core and then exposed to CLI/API/UI/MCP with small integration work.
 
-Full documentation: **<https://wacli.sh>**
+## Kirimy Goals
 
-## Features
+1. Keep existing CLI behavior compatible.
+2. Provide a practical API/service surface without breaking current workflows.
+3. Keep contracts centralized to avoid drift.
+4. Move from temporary `exec`-based daemon execution toward a shared service layer.
+5. Make feature rollouts easy: when wacli gains features, propagate them to contracts incrementally instead of rewriting logic.
 
-- **Auth + sync** — QR pairing, one-shot or follow-mode sync, optional media downloads, optional signed webhook fan-out.
-- **Offline message store** — SQLite with FTS5 search (LIKE fallback), filterable by chat, sender, direction, time, and media type, with status broadcasts stored separately.
-- **Sending** — text with mentions/replies/link-previews, files (image/video/audio/document, ≤100 MiB), stickers, voice notes, reactions, and status broadcasts; rapid-send guardrails and retry-receipt grace.
-- **History backfill** — best-effort per-chat requests to your primary device for older messages.
-- **Contacts / chats / groups / channels / profile** — search, alias, tag, archive, pin, mute, mark-read, rename, prune, manage participants and invite links, send to channels, and manage profile metadata.
-- **Diagnostics + safety** — `doctor`, read-only mode, store locks with owner reporting, panic recovery, bounded media queue, owner-only DB perms.
-- **Scriptable** — `--json` everywhere, `--events` NDJSON lifecycle stream, deterministic exit codes.
+## Current implementation status
 
-## Install
+At the moment, `cmd/kirimy-daemon` uses the **exec wrapper** approach for fast delivery:
 
-### Homebrew (recommended)
+- CLI remains the primary command entrypoint in `cmd/wacli/`.
+- Daemon API runs from `cmd/kirimy-daemon/`.
+- Active API surfaces are `POST /api/v1/exec`, `GET /api/v1/commands`, and `GET/POST/PUT/PATCH /api/v1/{command...}`.
 
-```bash
-brew install openclaw/tap/wacli
-```
+Planned evolution toward shared core service layer:
 
-If a Linux install reports `Binary was compiled with 'CGO_ENABLED=0'`, run `brew update && brew reinstall openclaw/tap/wacli`.
+1. Keep exec wrapper stable (minimal risk, fast iteration).
+2. Add internal service adapters that call `internal/app` and `internal/config` directly.
+3. Route selected APIs through service adapters, while CLI and other surfaces continue existing behavior.
+4. Expand to UI/MCP surfaces using the same service contract.
 
-### Build from source
+## Architecture (current)
 
-`wacli` uses `go-sqlite3`, so cgo + a C compiler are required.
+- `cmd/wacli/`: CLI entrypoint.
+- `cmd/kirimy-daemon/`: Daemon API entrypoint.
+- `internal/*`: Reusable core packages (`internal/app`, `internal/config`, `internal/store`, etc.).
+- `api/`: Endpoint contracts and OpenAPI.
+- `daemon/`: Operational runbook and deployment notes.
 
-- macOS: Xcode Command Line Tools.
-- Debian/Ubuntu: `sudo apt install build-essential`.
-
-```bash
-CGO_ENABLED=1 CGO_CFLAGS="-Wno-error=missing-braces" \
-  go install -tags sqlite_fts5 github.com/openclaw/wacli/cmd/wacli@latest
-```
-
-For local development:
-
-```bash
-git clone https://github.com/openclaw/wacli.git
-cd wacli
-CGO_ENABLED=1 CGO_CFLAGS="-Wno-error=missing-braces" \
-  go build -tags sqlite_fts5 -o ./dist/wacli ./cmd/wacli
-./dist/wacli --help
-```
-
-### Docker
+## Build
 
 ```bash
-docker build -t wacli .
-docker run --rm -it -v "$PWD/.wacli:/data" wacli auth
-docker run --rm -v "$PWD/.wacli:/data" wacli sync --follow
+cd /Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy
+
+go build -o ./bin/wacli ./cmd/wacli
+
+go build -o ./bin/kirimy-daemon ./cmd/kirimy-daemon
 ```
 
-The image keeps WhatsApp auth, SQLite, config, and cache under `/data`; it also includes `ffmpeg` for media helpers.
-
-## Quick start
+## Running CLI
 
 ```bash
-# 1. Pair (shows QR), then bootstrap sync
-wacli auth
-
-# 2. Keep syncing in the background (no QR; needs prior auth)
-wacli sync --follow
-
-# 3. Search
-wacli messages search "meeting"
-
-# 4. Send
-wacli send text --to 1234567890 --message "hello"
-wacli send file --to mom --file ./pic.jpg --caption "hi"
-wacli send status --message "available today" --background-color '#1f7a8c'
-
-# 5. Diagnostics
-wacli doctor
+./bin/wacli --help
+./bin/wacli auth
+./bin/wacli sync --follow
+./bin/wacli messages search "meeting"
+./bin/wacli send text --to 1234567890 --message "hello"
+./bin/wacli doctor
 ```
 
-Recipients accept a JID, phone number (E.164 or formatted), channel JID, or a synced contact/group/chat name. Ambiguous names prompt in a TTY; pass `--pick N` in scripts.
-
-More recipes — replies, mentions, stickers, voice, reactions, statuses, channels, history backfill, chat management — live in the [docs](https://wacli.sh).
-
-## Documentation
-
-| Area | Pages |
-| --- | --- |
-| **Setup** | [overview](docs/overview.md) · [auth](docs/auth.md) · [accounts](docs/accounts.md) · [sync](docs/sync.md) · [doctor](docs/doctor.md) |
-| **Messaging** | [messages](docs/messages.md) · [calls](docs/calls.md) · [send](docs/send.md) · [media](docs/media.md) · [presence](docs/presence.md) |
-| **Address book** | [contacts](docs/contacts.md) · [chats](docs/chats.md) · [groups](docs/groups.md) · [channels](docs/channels.md) |
-| **History** | [history coverage / fill / backfill](docs/history.md) |
-| **Local store** | [store](docs/store.md) · [companion integrations](docs/integrations.md) |
-| **Misc** | [profile](docs/profile.md) · [version](docs/version.md) · [completion](docs/completion.md) · [release](docs/release.md) |
-
-## Configuration
-
-Default store: `~/.local/state/wacli` on Linux, `~/.wacli` elsewhere. Existing `~/.wacli` directories on Linux keep working. Use `wacli accounts add NAME` and `--account NAME` for first-class multi-account stores.
-
-**Global flags:** `--store DIR`, `--account NAME`, `--json`, `--events`, `--full`, `--timeout DUR`, `--lock-wait DUR`, `--read-only`.
-
-**Environment overrides:**
-
-| Variable | Effect |
-| --- | --- |
-| `WACLI_STORE_DIR` | Default store directory. |
-| `WACLI_READONLY` | `1`/`true`/`yes`/`on` enables read-only mode. |
-| `WACLI_DEVICE_LABEL` | Linked-device label shown in WhatsApp. Defaults to `wacli - <OS> (<host>)`. |
-| `WACLI_DEVICE_PLATFORM` | Linked-device platform. Defaults to `DESKTOP`; invalid values fall back to `CHROME`. |
-| `WACLI_SYNC_MAX_MESSAGES` | Stop sync once total local messages exceed this count. |
-| `WACLI_SYNC_MAX_DB_SIZE` | Stop sync once `wacli.db` + sidecars reach a size like `500MB` or `2GB`. |
-
-## Backfilling older history
-
-`wacli sync` only stores what WhatsApp Web sends opportunistically. To fetch *older* messages, `wacli` issues on-demand history requests to your **primary device** (your phone), which must be online.
-
-- Best-effort: WhatsApp may not return full history.
-- One request anchors on the **oldest locally stored message** in that chat — run `sync` first.
-- Recommended `--count 50` per request (max 500). Max `--requests 100` per run.
-- `history coverage` shows which chats are eligible. `history fill --dry-run` plans without connecting.
+## Running Daemon
 
 ```bash
-wacli history coverage --include-blocked
-wacli history fill --dry-run --kind group --limit 20
-wacli history backfill --chat 1234567890@s.whatsapp.net --requests 10 --count 50
+./bin/kirimy-daemon --listen :8080 --store ~/.wacli --json
 ```
 
-Loop over every known chat:
+Important daemon flags:
 
-```bash
-wacli --json chats list --limit 100000 \
-  | jq -r '.data[].JID' \
-  | while read -r jid; do
-      wacli history backfill --chat "$jid" --requests 3 --count 50
-    done
-```
+- `--wacli-binary`: path to the CLI binary (`wacli`) used by the wrapper.
+- `--store`, `--account`: default runtime context.
+- `--read-only`: safer mode for read-only workloads.
+- `--json`, `--full`, `--events`: default CLI-style output modes.
+- `--command-timeout`: per-request timeout.
+- `--api-token`: enable `Authorization: Bearer <token>`.
 
-## Credits
+## CLI <-> API mapping (live)
 
-Heavily inspired by [`whatsapp-cli`](https://github.com/vicentereig/whatsapp-cli) by Vicente Reig.
+- `GET /healthz`
+- `GET /readyz`
+- `GET /api/v1/commands`
+- `POST /api/v1/exec`
+- `GET/POST/PUT/PATCH /api/v1/{command...}` (resource-first)
 
-## Maintainers
+Example:
 
-- Created by [@steipete](https://github.com/steipete)
-- Currently maintained by [@dinakars777](https://github.com/dinakars777)
+- `GET /api/v1/messages` → `wacli messages list`
+- `GET /api/v1/messages/search?q=invoice` → `wacli messages search invoice`
+- `GET /api/v1/contacts/search?query=nama` → `wacli contacts search nama`
+- `POST /api/v1/send/text?to=1234567890&message=halo` → `wacli send text ...`
+- `POST /api/v1/auth/status`
+- `POST /api/v1/sync?once=true`
+- `POST /api/v1/exec` with body `{ "command": ["messages","search"], "args": ["meeting"], "json": true }`
 
-## License
+## References
 
-See [`LICENSE`](LICENSE).
+- API contract and examples: [api/README.md](/Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy/api/README.md)
+- OpenAPI: [api/openapi.yaml](/Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy/api/openapi.yaml)
+- Daemon operations: [daemon/README.md](/Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy/daemon/README.md)
+
+## Maintenance Checklist
+
+For every new feature:
+
+1. Update CLI behavior and command contract in `cmd/wacli/`.
+2. Update API contract in `api/` (or expose via `POST /api/v1/exec`).
+3. Update deployment notes if operational behavior changes.
+4. When feature is ready for shared service layer, route it through adapters before adding UI/MCP surfaces.
