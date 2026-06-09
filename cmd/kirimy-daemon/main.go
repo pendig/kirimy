@@ -174,7 +174,7 @@ func main() {
 		Addr:         cfg.listenAddr,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 120 * time.Second,
+		WriteTimeout: 0,
 	}
 
 	log.Printf("kirimy daemon listening on %s", cfg.listenAddr)
@@ -417,11 +417,14 @@ func (cfg daemonConfig) runCLICommand(ctx context.Context, command []string, arg
 	lockWait := firstValue(params, "lock_wait")
 
 	if v := firstValue(params, "read_only"); v != "" {
-		if b, err := parseBoolValue(v); err == nil {
-			readOnly = b
-		} else {
+		b, err := parseBoolValue(v)
+		if err != nil {
 			return nil, http.StatusBadRequest, fmt.Errorf("invalid read_only: %w", err)
 		}
+		if cfg.defaultRO && !b {
+			return nil, http.StatusForbidden, fmt.Errorf("read-only mode is enforced by daemon configuration")
+		}
+		readOnly = b
 	}
 	if v := firstValue(params, "json"); v != "" {
 		if b, err := parseBoolValue(v); err == nil {
