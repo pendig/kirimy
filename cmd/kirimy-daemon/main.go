@@ -62,7 +62,7 @@ var topLevelWithDefault = map[string]commandDefaults{
 	"history":  {defaultSubcommand: "coverage"},
 	"polls":    {defaultSubcommand: "list"},
 	"store":    {defaultSubcommand: "stats"},
-	"sync":     {defaultFlags: []string{"--once"}},
+	"sync":     {},
 }
 
 var topLevelDirect = map[string]bool{
@@ -97,12 +97,12 @@ var commandCatalog = map[string][]string{
 var reservedKeys = map[string]struct{}{
 	"store":     {},
 	"account":   {},
-	"read_only": {},
+	"read-only": {},
 	"json":      {},
 	"full":      {},
 	"events":    {},
 	"timeout":   {},
-	"lock_wait": {},
+	"lock-wait": {},
 	"command":   {},
 	"args":      {},
 }
@@ -242,7 +242,7 @@ func (cfg daemonConfig) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	params := map[string][]string{}
 	for key, val := range req.RawFlags {
-		if err := appendValueFromInterface(params, key, val); err != nil {
+		if err := appendValueFromInterface(params, normalizeFlagName(key), val); err != nil {
 			writeJSON(w, http.StatusBadRequest, cliResponse{Status: "error", Message: "invalid flag value", Error: err.Error()})
 			return
 		}
@@ -257,9 +257,9 @@ func (cfg daemonConfig) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ReadOnly != nil {
 		if *req.ReadOnly {
-			runtime["read_only"] = "1"
+			runtime["read-only"] = "1"
 		} else {
-			runtime["read_only"] = "0"
+			runtime["read-only"] = "0"
 		}
 	}
 	if req.JSON != nil {
@@ -287,32 +287,19 @@ func (cfg daemonConfig) handleExec(w http.ResponseWriter, r *http.Request) {
 		runtime["timeout"] = req.Timeout
 	}
 	if req.LockWait != "" {
-		runtime["lock_wait"] = req.LockWait
+		runtime["lock-wait"] = req.LockWait
 	}
 
 	for key, val := range runtime {
 		params[key] = append(params[key], val)
 	}
 
-	result, statusCode, err := cfg.runCLICommand(r.Context(), req.Command, req.Args, params, paramsToStrings(params))
+	result, statusCode, err := cfg.runCLICommand(r.Context(), req.Command, req.Args, params, nil)
 	if err != nil {
 		writeJSON(w, statusCode, cliResponse{Status: "error", Message: "command failed", Error: err.Error(), Data: result})
 		return
 	}
 	writeJSON(w, statusCode, cliResponse{Status: "ok", Data: result})
-}
-
-func paramsToStrings(params map[string][]string) []string {
-	args := make([]string, 0)
-	for k, values := range params {
-		if _, skip := reservedKeys[k]; skip {
-			continue
-		}
-		for _, value := range values {
-			args = append(args, normalizeFlagName(k), value)
-		}
-	}
-	return args
 }
 
 func (cfg daemonConfig) handleCommandRoute(w http.ResponseWriter, r *http.Request) {
@@ -585,6 +572,7 @@ func flagArgsFromParams(params map[string][]string) []string {
 func collectRequestParams(r *http.Request) (map[string][]string, []string, error) {
 	values := map[string][]string{}
 	for key, vals := range r.URL.Query() {
+		key = normalizeFlagName(key)
 		for _, value := range vals {
 			if strings.TrimSpace(value) == "" {
 				continue
@@ -625,7 +613,7 @@ func collectRequestParams(r *http.Request) (map[string][]string, []string, error
 			positional = append(positional, additional...)
 			continue
 		}
-		if err := appendValueFromInterface(values, key, raw); err != nil {
+		if err := appendValueFromInterface(values, normalizeFlagName(key), raw); err != nil {
 			return nil, nil, fmt.Errorf("invalid %s: %w", key, err)
 		}
 	}
