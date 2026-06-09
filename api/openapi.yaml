@@ -11,19 +11,19 @@ paths:
       summary: Health check daemon
       responses:
         '200':
-          description: Daemon aktif
+          description: Daemon is active
   /readyz:
     get:
       summary: Readiness check daemon
       responses:
         '200':
-          description: Daemon siap
+          description: Daemon is ready
   /api/v1/commands:
     get:
       summary: List supported top-level commands
       responses:
         '200':
-          description: Daftar command/subcommand yang dikenal
+          description: List of known commands and subcommands
   /api/v1/exec:
     post:
       summary: Execute arbitrary wacli command

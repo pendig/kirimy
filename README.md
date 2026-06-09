@@ -44,11 +44,11 @@ Planned evolution toward shared core service layer:
 ## Build
 
 ```bash
-cd /Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy
+cd path/to/kirimy
 
-go build -o ./bin/wacli ./cmd/wacli
+CGO_ENABLED=1 CGO_CFLAGS='-Wno-error=missing-braces' go build -tags sqlite_fts5 -o ./bin/wacli ./cmd/wacli
 
-go build -o ./bin/kirimy-daemon ./cmd/kirimy-daemon
+CGO_ENABLED=1 CGO_CFLAGS='-Wno-error=missing-braces' go build -tags sqlite_fts5 -o ./bin/kirimy-daemon ./cmd/kirimy-daemon
 ```
 
 ## Running CLI
@@ -97,9 +97,9 @@ Example:
 
 ## References
 
-- API contract and examples: [api/README.md](/Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy/api/README.md)
-- OpenAPI: [api/openapi.yaml](/Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy/api/openapi.yaml)
-- Daemon operations: [daemon/README.md](/Users/wauputra/Documents/02_Bisnis_Pekerjaan/07_Dev/kirimy/daemon/README.md)
+- API contract and examples: [api/README.md](api/README.md)
+- OpenAPI: [api/openapi.yaml](api/openapi.yaml)
+- Daemon operations: [daemon/README.md](daemon/README.md)
 
 ## Maintenance Checklist
 
