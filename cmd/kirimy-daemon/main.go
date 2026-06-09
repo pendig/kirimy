@@ -79,15 +79,16 @@ var commandCatalog = map[string][]string{
 	"calls":    {"list"},
 	"channels": {"list", "info", "join", "leave"},
 	"chats":    {"list", "show", "archive", "unarchive", "pin", "unpin", "mute", "unmute", "mark-read", "mark-unread", "cleanup"},
-	"contacts": {"search", "show", "refresh", "import-system", "alias", "tags"},
+	"contacts": {"add", "refresh", "rm", "search", "set", "show", "tags", "alias", "import-system"},
 	"doctor":   {""},
 	"docs":     {""},
 	"history":  {"coverage", "fill", "backfill"},
 	"media":    {"download"},
 	"messages": {"list", "search", "starred", "show", "context", "export", "delete", "revoke", "edit", "forward"},
-	"polls":    {"show", "vote", "list"},
+	"poll":     {"show", "vote"},
+	"polls":    {"list"},
 	"presence": {"typing", "paused"},
-	"profile":  {"set-picture", "remove-picture", "picture", "set-about", "get-about", "set-name", "business", "set-business"},
+	"profile":  {"set-picture", "remove-picture", "picture-info", "set-about", "set-name", "get-about", "business"},
 	"send":     {"text", "file", "sticker", "voice", "react", "poll", "status", "select"},
 	"store":    {"stats", "cleanup"},
 	"sync":     {""},
@@ -305,6 +306,13 @@ func (cfg daemonConfig) handleExec(w http.ResponseWriter, r *http.Request) {
 func (cfg daemonConfig) handleCommandRoute(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, defaultAPIRoot+"/") {
 		writeJSON(w, http.StatusNotFound, cliResponse{Status: "error", Message: "invalid api path"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch:
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, cliResponse{Status: "error", Message: "method not allowed"})
 		return
 	}
 
