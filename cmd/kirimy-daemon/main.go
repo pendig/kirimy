@@ -45,6 +45,9 @@ type daemonConfig struct {
 	defaultEvents  bool
 	defaultRO      bool
 	reqTimeout     time.Duration
+	catalog        map[string][]string
+	directCmds     map[string]bool
+	defaultCmds    map[string]commandDefaults
 }
 
 const (
@@ -65,23 +68,16 @@ var topLevelWithDefault = map[string]commandDefaults{
 	"sync":     {},
 }
 
-var topLevelDirect = map[string]bool{
-	"auth":    true,
-	"doctor":  true,
-	"docs":    true,
-	"sync":    true,
-	"version": true,
-}
-
 var commandCatalog = map[string][]string{
 	"accounts": {"list", "add", "use", "show", "remove"},
 	"auth":     {"", "status", "logout"},
 	"calls":    {"list"},
 	"channels": {"list", "info", "join", "leave"},
 	"chats":    {"list", "show", "archive", "unarchive", "pin", "unpin", "mute", "unmute", "mark-read", "mark-unread", "cleanup"},
-	"contacts": {"add", "refresh", "rm", "search", "set", "show", "tags", "alias", "import-system"},
+	"contacts": {"search", "show", "refresh", "import-system", "alias", "tags"},
 	"doctor":   {""},
 	"docs":     {""},
+	"groups":   {"create", "list", "refresh", "info", "rename", "topic", "description", "announce-only", "locked", "participants", "requests", "invite", "join", "leave", "prune"},
 	"history":  {"coverage", "fill", "backfill"},
 	"media":    {"download"},
 	"messages": {"list", "search", "starred", "show", "context", "export", "delete", "revoke", "edit", "forward"},
@@ -106,6 +102,19 @@ var reservedKeys = map[string]struct{}{
 	"lock-wait": {},
 	"command":   {},
 	"args":      {},
+}
+
+func deriveDirectCmds(catalog map[string][]string) map[string]bool {
+	direct := make(map[string]bool)
+	for cmd, subs := range catalog {
+		for _, sub := range subs {
+			if sub == "" {
+				direct[cmd] = true
+				break
+			}
+		}
+	}
+	return direct
 }
 
 func main() {
@@ -136,6 +145,10 @@ func main() {
 	if strings.TrimSpace(cfg.binaryPath) == "" {
 		cfg.binaryPath = "wacli"
 	}
+
+	cfg.catalog = commandCatalog
+	cfg.directCmds = deriveDirectCmds(cfg.catalog)
+	cfg.defaultCmds = topLevelWithDefault
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -203,8 +216,8 @@ func (cfg daemonConfig) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, cliResponse{Status: "error", Message: "method not allowed"})
 		return
 	}
-	commands := make(map[string][]string, len(commandCatalog))
-	for cmd, sub := range commandCatalog {
+	commands := make(map[string][]string, len(cfg.catalog))
+	for cmd, sub := range cfg.catalog {
 		commands[cmd] = append([]string(nil), sub...)
 	}
 	writeJSON(w, http.StatusOK, cliResponse{Status: "ok", Data: map[string]any{"commands": commands}})
@@ -355,12 +368,12 @@ func (cfg daemonConfig) handleCommandRoute(w http.ResponseWriter, r *http.Reques
 		} else {
 			command = append(command, parts[1:]...)
 		}
-	} else if presets, ok := topLevelWithDefault[resource]; ok && len(parts) == 1 {
+	} else if presets, ok := cfg.defaultCmds[resource]; ok && len(parts) == 1 {
 		if presets.defaultSubcommand != "" {
 			command = append(command, presets.defaultSubcommand)
 		} else if len(presets.defaultFlags) > 0 {
 			command = append(command, presets.defaultFlags...)
-		} else if !topLevelDirect[resource] {
+		} else if !cfg.directCmds[resource] {
 			writeJSON(w, http.StatusBadRequest, cliResponse{Status: "error", Message: fmt.Sprintf("%s requires subcommand", resource)})
 			return
 		}
@@ -387,7 +400,7 @@ func (cfg daemonConfig) handleCommandRoute(w http.ResponseWriter, r *http.Reques
 		command = append(command, "--once")
 	}
 
-	if !topLevelDirect[resource] && len(command) == 1 {
+	if !cfg.directCmds[resource] && len(command) == 1 {
 		writeJSON(w, http.StatusBadRequest, cliResponse{Status: "error", Message: fmt.Sprintf("%s requires a subcommand", resource)})
 		return
 	}

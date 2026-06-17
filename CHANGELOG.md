@@ -6,6 +6,15 @@
 
 - Groups: add live admin commands for creating groups, setting descriptions, toggling announce-only and admin-only edits, and approving or rejecting join requests. (#265 - thanks @dovocoder)
 - Profile: add commands to remove the profile picture, set About text, set the profile display name, fetch profile picture metadata, fetch a user's About text, and fetch WhatsApp Business profile details. (#267 - thanks @dovocoder)
+- Daemon: add comprehensive unit test suite covering all HTTP endpoints, command routing, parameter handling, auth, read-only enforcement, and exec wrapper behavior.
+- Daemon: derive `directCmds` dynamically from the command catalog instead of a hardcoded map, reducing drift between catalog and routing logic.
+- Docker: build and ship `kirimy-daemon` binary alongside `wacli` in the Docker image.
+
+### Changed
+
+- Daemon: fix command catalog drift — add `groups` (15 subcommands), correct `contacts` subcommands (remove stale `add`/`rm`/`set`, add `alias`/`tags`), and align all entries with the current CLI command tree.
+- Daemon: move `commandCatalog` and routing maps (`topLevelDirect`) into `daemonConfig` struct, making them configurable per-instance instead of package-level globals.
+- API: enrich OpenAPI spec (v1.1.0) with reusable component schemas (`DaemonResponse`, `CommandResult`, `ExecRequest`, `RuntimeFlags`) and response schemas on all endpoints.
 
 ### Security
 
