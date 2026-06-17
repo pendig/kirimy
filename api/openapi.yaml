@@ -1,10 +1,100 @@
 openapi: 3.0.3
 info:
   title: Kirimy Daemon API
-  version: 1.0.0
+  version: 1.1.0
   description: HTTP adapter for CLI command execution (`kirimy-daemon`).
 servers:
   - url: http://localhost:8080
+components:
+  schemas:
+    DaemonResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        message:
+          type: string
+        error:
+          type: string
+        duration:
+          type: string
+        data:
+          type: object
+    CommandResult:
+      type: object
+      properties:
+        command:
+          type: array
+          items:
+            type: string
+        stdout:
+          type: string
+        stderr:
+          type: string
+        exit_code:
+          type: integer
+    ExecRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: array
+          items:
+            type: string
+        args:
+          type: array
+          items:
+            type: string
+        store:
+          type: string
+        account:
+          type: string
+        read_only:
+          type: boolean
+        json:
+          type: boolean
+        full:
+          type: boolean
+        events:
+          type: boolean
+        timeout:
+          type: string
+        lock_wait:
+          type: string
+        flags:
+          type: object
+          additionalProperties: true
+    RuntimeFlags:
+      type: object
+      properties:
+        store:
+          type: string
+        account:
+          type: string
+        read_only:
+          type: boolean
+        json:
+          type: boolean
+        full:
+          type: boolean
+        events:
+          type: boolean
+        timeout:
+          type: string
+        lock_wait:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
 paths:
   /healthz:
     get:
@@ -12,18 +102,42 @@ paths:
       responses:
         '200':
           description: Daemon is active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
   /readyz:
     get:
       summary: Readiness check daemon
       responses:
         '200':
           description: Daemon is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
   /api/v1/commands:
     get:
-      summary: List supported top-level commands
+      summary: List supported top-level commands and subcommands
       responses:
         '200':
-          description: List of known commands and subcommands
+          description: Command catalog
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          commands:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: string
   /api/v1/exec:
     post:
       summary: Execute arbitrary wacli command
@@ -32,40 +146,28 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                command:
-                  type: array
-                  items:
-                    type: string
-                args:
-                  type: array
-                  items:
-                    type: string
-                store:
-                  type: string
-                account:
-                  type: string
-                read_only:
-                  type: boolean
-                json:
-                  type: boolean
-                full:
-                  type: boolean
-                events:
-                  type: boolean
-                timeout:
-                  type: string
-                lock_wait:
-                  type: string
+              $ref: '#/components/schemas/ExecRequest'
       responses:
         '200':
-          description: Command success/fail result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Command error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
   /api/v1/{command}:
     get:
-      summary: Route top-level command without explicit subcommand
+      summary: Route top-level command (uses default subcommand if configured)
       parameters:
         - in: path
           name: command
@@ -78,9 +180,22 @@ paths:
             type: string
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
     post:
       summary: Route top-level command or command+subcommand
       parameters:
@@ -94,33 +209,25 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                store:
-                  type: string
-                account:
-                  type: string
-                read_only:
-                  type: boolean
-                json:
-                  type: boolean
-                full:
-                  type: boolean
-                events:
-                  type: boolean
-                timeout:
-                  type: string
-                lock_wait:
-                  type: string
-                args:
-                  type: array
-                  items:
-                    type: string
+              $ref: '#/components/schemas/RuntimeFlags'
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
     put:
       summary: Route top-level command or command+subcommand
       parameters:
@@ -134,12 +241,25 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/RuntimeFlags'
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
     patch:
       summary: Route top-level command or command+subcommand
       parameters:
@@ -153,12 +273,25 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/RuntimeFlags'
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
   /api/v1/{command}/{subcommand}:
     get:
       summary: Route explicit command + subcommand
@@ -175,9 +308,22 @@ paths:
             type: string
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
     post:
       summary: Route explicit command + subcommand
       parameters:
@@ -196,12 +342,25 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/RuntimeFlags'
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
     put:
       summary: Route explicit command + subcommand
       parameters:
@@ -220,12 +379,25 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/RuntimeFlags'
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
     patch:
       summary: Route explicit command + subcommand
       parameters:
@@ -244,9 +416,22 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/RuntimeFlags'
       responses:
         '200':
-          description: Result
+          description: Command result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DaemonResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CommandResult'
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonResponse'
